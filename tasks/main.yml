@@ -1,0 +1,66 @@
+---
+- name: Install necessary packages
+  yum:
+    name: '{{ item }}'
+    state: present
+    update_cache: yes
+  with_items:
+    - python-setuptools
+    - python-setuptools-devel
+    - postgresql
+    - postgresql-server
+
+- easy_install:
+    name: pip
+    state: latest
+
+- name: Init postgresql db
+  command: postgresql-setup initdb
+  args:
+    creates: /var/lib/pgsql/initdb.log
+
+- name: Allow password login from all hosts
+  lineinfile:
+    dest: /var/lib/pgsql/data/pg_hba.conf
+    line: 'host all all all md5'
+    insertbefore: 'host\s+all\s+all\s+127.0.0.1/32\s+ident'
+    state: present
+  notify: restart postgresql
+
+- name: Change config to bind to all interfaces
+  template:
+    src: postgresql.conf.j2
+    dest: /var/lib/pgsql/data/postgresql.conf
+    owner: postgres
+    group: postgres
+  notify:
+    - restart postgresql
+
+  # To ensure that later tasks can connect to the database flush handlers here to restart postgresql
+- meta: flush_handlers
+
+- name: Start postgres service
+  service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Install psycopg2 to enable ansible to manage postgresql users and databases
+  pip:
+    name: psycopg2
+
+- name: Create database users
+  become: yes
+  become_user: postgres
+  postgresql_user:
+    name: '{{ item.owner }}'
+    password: '{{ item.password }}'
+  with_items: '{{ databases }}'
+
+- name: Create databases
+  become: yes
+  become_user: postgres
+  postgresql_db:
+    name: '{{ item.name }}'
+    owner: '{{ item.owner }}'
+  with_items: '{{ databases }}'
