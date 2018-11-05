@@ -1,66 +1,58 @@
 ---
-- name: Install necessary packages
+- name: Ensure all required packages are installed
   yum:
-    name: '{{ item }}'
+    name: '{{ packages }}'
     state: present
     update_cache: yes
-  with_items:
-    - python-setuptools
-    - python-setuptools-devel
-    - postgresql
-    - postgresql-server
+  vars:
+    packages:
+      - python-psycopg2
+      - postgresql-server
 
-- easy_install:
-    name: pip
-    state: latest
-
-- name: Init postgresql db
+- name: Init PostgreSQL DB if needed
   command: postgresql-setup initdb
   args:
-    creates: /var/lib/pgsql/initdb.log
+    creates: "{{ POSTGRESQL_DATA_DIRECTORY }}/PG_VERSION"
 
-- name: Allow password login from all hosts
-  lineinfile:
-    dest: /var/lib/pgsql/data/pg_hba.conf
-    line: 'host all all all md5'
-    insertbefore: 'host\s+all\s+all\s+127.0.0.1/32\s+ident'
-    state: present
-  notify: restart postgresql
-
-- name: Change config to bind to all interfaces
+- name: Ensure pg_hba.conf file is up-to-date
   template:
-    src: postgresql.conf.j2
-    dest: /var/lib/pgsql/data/postgresql.conf
+    src: pg_hba.conf.j2
+    dest: '{{ POSTGRESQL_DATA_DIRECTORY }}/pg_hba.conf'
     owner: postgres
     group: postgres
-  notify:
-    - restart postgresql
+    mode: 0640
+  notify: restart postgresql
+
+- name: Ensure postgresql.conf is up-to-date
+  lineinfile:
+    dest: '{{ POSTGRESQL_DATA_DIRECTORY }}/postgresql.conf'
+    regexp: '^#?{{ item.option }}.+$'
+    line: "{{ item.option }} = '{{ item.value }}'"
+    state: "{{ item.state | default('present') }}"
+  loop: '{{ POSTGRESQL_CONFIG_OPTIONS }}'
+  notify: restart postgresql
 
   # To ensure that later tasks can connect to the database flush handlers here to restart postgresql
 - meta: flush_handlers
 
-- name: Start postgres service
+- name: Ensure PostgreSQL is running and enabled
   service:
     name: postgresql
     state: started
     enabled: yes
 
-- name: Install psycopg2 to enable ansible to manage postgresql users and databases
-  pip:
-    name: psycopg2
-
-- name: Create database users
+- name: Ensure database users exist
   become: yes
   become_user: postgres
   postgresql_user:
-    name: '{{ item.owner }}'
+    name: '{{ item.name }}'
     password: '{{ item.password }}'
-  with_items: '{{ databases }}'
+  with_items: '{{ POSTGRESQL_USERS }}'
 
-- name: Create databases
+- name: Ensure databases exist
   become: yes
   become_user: postgres
   postgresql_db:
     name: '{{ item.name }}'
     owner: '{{ item.owner }}'
-  with_items: '{{ databases }}'
+  with_items: '{{ POSTGRESQL_DATABASES }}'

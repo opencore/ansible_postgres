@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# PostgreSQL Client Authentication Configuration File
+# ===================================================
+#
+# See: https://www.postgresql.org/docs/current/static/auth-pg-hba-conf.html
+
+
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+{%- if POSTGRESQL_HBA_INCLUDE_DEFAULTS %}
+# Default:
+{% for entry in POSTGRESQL_HBA_DEFAULT %}
+{{ entry.type }} {{ entry.database }} {{ entry.user }} {{ entry.address | default('') }} {{ entry.method }}
+{% endfor %}
+{% endif %}
+
+# User custom
+{% for entry in POSTGRESQL_HBA_CUSTOM %}
+{{ entry.type }} {{ entry.database }} {{ entry.user }} {{ entry.address | default('') }} {{ entry.method }}
+{% endfor %}

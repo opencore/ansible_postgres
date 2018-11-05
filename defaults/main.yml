@@ -1,3 +1,13 @@
 ---
-databases: []
+POSTGRESQL_DATA_DIRECTORY: /var/lib/pgsql/data
 
+POSTGRESQL_HBA_INCLUDE_DEFAULTS: true
+POSTGRESQL_HBA_DEFAULT:
+  - { type: local, database: all, user: all, method: peer }
+  - { type: host, database: all, user: all, address: '127.0.0.1/32', method: ident }
+  - { type: host, database: all, user: all, address: '::1/128', method: ident }
+
+POSTGRESQL_HBA_CUSTOM:
+POSTGRESQL_CONFIG_OPTIONS:
+
+POSTGRESQL_DATABASES: []
